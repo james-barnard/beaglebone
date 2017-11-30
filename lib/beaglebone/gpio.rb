@@ -34,7 +34,7 @@ module Beaglebone #:nodoc:
       def pin_mode(pin, mode, pullmode = nil, slewrate = nil)
         puts "pin_mode: #{pin}: #{mode}"
         validate_mode!(mode)
-        validate_pin!(pin, :gpio)
+        validate_pin!(pin)
 
         #get info from PINS hash
         pininfo = PINS[pin]
@@ -61,13 +61,9 @@ module Beaglebone #:nodoc:
       end
 
       # check if a pin of given type is valid
-      def validate_pin!(pin, type = nil)
-        #check to see if pin exists
+      def validate_pin!(pin)
         raise ArgumentError, "No such PIN: #{pin.to_s}" unless PINS[pin]
-
-        if type
-          raise StandardError, "Pin does not support #{type}: #{pin.to_s}" unless PINS[pin][type]
-        end
+        raise ArgumentError, "Not a GPIO pin: #{pin.to_s}" unless PINS[pin][:gpio]
       end
 
       def check_direction!(pin, mode)
@@ -236,7 +232,6 @@ module Beaglebone #:nodoc:
 
       # Returns true if specified pin is enabled in GPIO mode, else false
       def enabled?(pin)
-        return false unless valid?(pin)
         return true if Beaglebone::get_pin_status(pin, :type) == :gpio
 
         if Dir.exists?(gpio_directory(pin))
@@ -308,7 +303,6 @@ module Beaglebone #:nodoc:
       #   GPIO.set_gpio_mode(:P9_12, :OUT)
       #   GPIO.set_gpio_mode(:P9_11, :IN)
       def set_gpio_mode(pin, mode)
-        Beaglebone::validate_pin!(pin, :gpio)
         validate_mode!(mode)
         check_gpio_enabled(pin)
 
@@ -326,7 +320,6 @@ module Beaglebone #:nodoc:
       #   GPIO.set_gpio_edge(:P9_11, :RISING)
       def set_gpio_edge(pin, edge, force=nil)
         validate_edge(edge)
-        Beaglebone::validate_pin!(pin, :gpio)
 
         raise StandardError, "PIN not in GPIO IN mode: #{pin}" unless get_gpio_mode(pin) == :IN
 
@@ -372,9 +365,6 @@ module Beaglebone #:nodoc:
       #
       # @param pin should be a symbol representing the header pin
       def disable_gpio_pin(pin)
-
-        Beaglebone::validate_pin!(pin, :gpio)
-
         pininfo = PINS[pin]
 
         close_value_fd(pin)
@@ -406,8 +396,6 @@ module Beaglebone #:nodoc:
 
       #check if pin is valid to use as gpio pin
       def valid?(pin)
-        return false unless PINS[pin]
-        return false unless PINS[pin][:gpio]
 
         true
       end
@@ -468,7 +456,6 @@ module Beaglebone #:nodoc:
 
       #ensure gpio pin is enabled
       def check_gpio_enabled(pin)
-        Beaglebone::validate_pin!(pin, :gpio)
         raise StandardError, "PIN not GPIO enabled: #{pin}" unless enabled?(pin)
       end
 
