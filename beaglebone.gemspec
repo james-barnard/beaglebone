@@ -1,11 +1,11 @@
 Gem::Specification.new do |s|
   s.name        = 'beaglebone'
-  s.version     = '1.2.6'
-  s.date        = '2015-03-01'
-  s.summary     = 'Beaglebone IO Gem'
+  s.version     = '1.2.8'
+  s.date        = '2017-11-30'
+  s.summary     = 'Beaglebone IO Gem -Improved'
   s.description = 'A Full Featured Beaglebone IO Gem'
-  s.author      = 'Rob Mosher'
-  s.email       = 'nyt-rubygems@countercultured.net'
+  s.author      = 'Rob Mosher, James Barnard'
+  s.email       = 'james.barnard.co@gmail.com'
   s.files       = `git ls-files`.split("\n")
   s.homepage    = 'https://github.com/notnyt/beaglebone'
   s.license     = 'GPL-3.0'
