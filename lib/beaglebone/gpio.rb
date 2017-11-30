@@ -476,7 +476,7 @@ module Beaglebone #:nodoc:
       end
 
       def configure_pin(pin, mode, pullmode, slewrate, force = false)
-        raise "config-pin failed: #{$?}" unless system("config-pin", pin.to_s, config_pin_mode)
+        raise "config-pin failed: #{$?}" unless system("config-pin", pin.to_s, config_pin_mode(mode))
       end
     end
   end
