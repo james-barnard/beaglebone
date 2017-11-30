@@ -142,8 +142,6 @@ module Beaglebone #:nodoc:
 
       private
       def gpio_directory(pin)
-        raise StandardError, 'Invalid Pin' unless valid?(pin)
-
         "#{GPIO_USERSPACE}/gpio#{PINS[pin][:gpio]}"
       end
 
