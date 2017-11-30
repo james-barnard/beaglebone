@@ -472,7 +472,7 @@ module Beaglebone #:nodoc:
       end
 
       def config_pin_mode(mode)
-        mode == :IN ? :in- : :lo
+        mode == :IN ? 'in-' : 'lo'
       end
 
       def configure_pin(pin, mode, pullmode, slewrate, force = false)
