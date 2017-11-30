@@ -1,8 +1,2 @@
 require 'beaglebone/beaglebone'
-require 'beaglebone/spi'
-require 'beaglebone/i2c'
-require 'beaglebone/uart'
-require 'beaglebone/pwm'
-require 'beaglebone/ain'
 require 'beaglebone/gpio'
-require 'beaglebone/shiftregister'

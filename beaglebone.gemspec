@@ -7,6 +7,6 @@ Gem::Specification.new do |s|
   s.author      = 'Rob Mosher, James Barnard'
   s.email       = 'james.barnard.co@gmail.com'
   s.files       = `git ls-files`.split("\n")
-  s.homepage    = 'https://github.com/notnyt/beaglebone'
+  s.homepage    = 'https://github.com/james-barnard/beaglebone.git'
   s.license     = 'GPL-3.0'
 end
