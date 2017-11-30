@@ -235,7 +235,7 @@ module Beaglebone #:nodoc:
         return true if Beaglebone::get_pin_status(pin, :type) == :gpio
         puts 'get_pin_status returned false'
 
-        puts "gpio_directory: #{(gpio_directory(pin)}"
+        puts "gpio_directory: #{gpio_directory(pin)}"
         if Dir.exists?(gpio_directory(pin))
           Beaglebone::set_pin_status(pin, :type, :gpio)
           return true
