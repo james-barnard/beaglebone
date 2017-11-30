@@ -223,16 +223,6 @@ module Beaglebone
       end
     end
 
-    # check if a pin of given type is valid
-    def check_valid_pin(pin, type = nil)
-      #check to see if pin exists
-      raise ArgumentError, "No such PIN: #{pin.to_s}" unless PINS[pin]
-
-      if type
-        raise StandardError, "Pin does not support #{type}: #{pin.to_s}" unless PINS[pin][type]
-      end
-    end
-
     # return capemgr directory
     def get_capemgr_dir
       Dir.glob([ '/sys/devices/bone_capemgr.*', '/sys/devices/platform/bone_capemgr' ]).first

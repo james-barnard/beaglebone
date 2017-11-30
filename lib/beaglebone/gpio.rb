@@ -20,44 +20,8 @@ module Beaglebone #:nodoc:
       # pull modes
       PULLMODES = [ :PULLUP, :PULLDOWN, :NONE ]
 
-      # dts template for GPIO pin
-      GPIOTEMPLATE = '/*
- * This is a template-generated file
- */
+      GPIO_USERSPACE = '/sys/class/gpio'
 
-/dts-v1/;
-/plugin/;
-
-/{
-    compatible = "ti,beaglebone", "ti,beaglebone-black";
-    part_number = "BS_PINMODE_!PIN_KEY!_!DATA!";
-
-    exclusive-use =
-        "!PIN_DOT_KEY!",
-        "!PIN_FUNCTION!";
-
-    fragment@0 {
-        target = <&am33xx_pinmux>;
-        __overlay__ {
-            bs_pinmode_!PIN_KEY!_!DATA!: pinmux_bs_pinmode_!PIN_KEY!_!DATA! {
-                pinctrl-single,pins = <!PIN_OFFSET! !DATA!>;
-            };
-        };
-    };
-
-    fragment@1 {
-        target = <&ocp>;
-        __overlay__ {
-            bs_pinmode_!PIN_KEY!_!DATA!_pinmux {
-                compatible = "bone-pinmux-helper";
-                status = "okay";
-                pinctrl-names = "default";
-                pinctrl-0 = <&bs_pinmode_!PIN_KEY!_!DATA!>;
-            };
-        };
-    };
-};
-'
       # Initialize a GPIO pin
       #
       # @param pin should be a symbol representing the header pin
@@ -68,12 +32,8 @@ module Beaglebone #:nodoc:
       #   GPIO.pin_mode(:P9_12, :OUT)
       #   GPIO.pin_mode(:P9_11, :IN, :PULLUP, :FAST)
       def pin_mode(pin, mode, pullmode = nil, slewrate = nil)
-
-        #make sure a valid mode was passed
-        check_valid_mode(mode)
-
-        #make sure a valid pin was passed and that it supports GPIO
-        Beaglebone::check_valid_pin(pin, :gpio)
+        validate_mode!(mode)
+        validate_pin!(pin, :gpio)
 
         #get info from PINS hash
         pininfo = PINS[pin]
@@ -83,56 +43,51 @@ module Beaglebone #:nodoc:
           Beaglebone::disable_pin(pin)
         end
 
-        pullmode = pullmode || :PULLUP
-        slewrate = slewrate || :FAST
-
-        raise ArgumentError, "Invalid Slew Rate (#{slewrate}) specified on: #{pin}" unless SLEWRATES.include?(slewrate)
-        raise ArgumentError, "Invalid Pull Mode (#{pullmode}) specified on: #{pin}" unless PULLMODES.include?(pullmode)
-
         if mode == :IN and pullmode != :PULLUP and ( pininfo[:mmc] or pin == :P9_15 )
           raise ArgumentError, "Invalid Pull mode specified for pin: #{pin} (#{pullmode})"
         end
 
-        #export pin unless its an on board LED, if it isn't already exported
-        if pininfo[:led]
-          raise StandardError, "LEDs only support OUT mode: #{pin.to_s}" unless mode == :OUT
-          File.open("#{gpio_directory(pin)}/trigger", 'w') { |f| f.write('gpio') }
-        else
-          # if pin is not an onboard LED
+        unless Beaglebone::get_pin_status(pin, :type) == :gpio
+          configure_pin(pin, mode, pullmode, slewrate, false)
+          export_pin(pininfo)
 
-          # create device tree overlay for this pin, do not force rebuild
-          pin_data = create_device_tree(pin, mode, pullmode, slewrate, false)
-
-          # unload previous dtb if loaded
-          begin
-            Beaglebone::device_tree_unload("#{TREES[:GPIO][:pin]}#{pin}_.*")
-          rescue
-            #
-          end
-
-          # load device tree overlay
-          Beaglebone::device_tree_load("#{TREES[:GPIO][:pin]}#{pin}_0x#{pin_data.to_s(16)}")
-
-          # export gpio pin
-          begin
-            File.open('/sys/class/gpio/export', 'w') { |f| f.write pininfo[:gpio] }
-          rescue
-            #
-          end
-
-          #check to see if pin is GPIO enabled in /sys/class/gpio/
           raise StandardError, "GPIO was unable to initalize pin: #{pin.to_s}" unless enabled?(pin)
-
-        end unless Beaglebone::get_pin_status(pin, :type) == :gpio
-
-        #set pin mode
-        unless pininfo[:led]
-          set_gpio_mode(pin, mode)
-          dir = read_gpio_direction(pin)
-          raise StandardError, "GPIO was unable to set mode: #{pin.to_s} to #{mode.to_s} (#{dir})" if mode != dir
         end
 
+        check_direction!(pin, mode)
+
         Beaglebone::set_pin_status(pin, :mode, mode)
+      end
+
+      # check if a pin of given type is valid
+      def validate_pin!(pin, type = nil)
+        #check to see if pin exists
+        raise ArgumentError, "No such PIN: #{pin.to_s}" unless PINS[pin]
+
+        if type
+          raise StandardError, "Pin does not support #{type}: #{pin.to_s}" unless PINS[pin][type]
+        end
+      end
+
+      def check_direction!(pin, mode)
+        dir = read_gpio_direction(pin)
+        raise StandardError, "GPIO was unable to set mode: #{pin.to_s} to #{mode.to_s} (#{dir})" if mode != dir
+      end
+
+      def export_pin(pininfo)
+        begin
+          File.open("#{GPIO_USERSPACE}/export", 'w') { |f| f.write pininfo[:gpio] }
+        rescue
+          #
+        end
+      end
+
+      def unexport_pin(pin)
+        begin
+          File.open("#{GPIO_USERSPACE}/unexport", 'w') { |f| f.write(pininfo[:gpio]) }
+        rescue
+          #
+        end
       end
 
       # Sets a pin's output state
@@ -144,7 +99,7 @@ module Beaglebone #:nodoc:
       #   GPIO.digital_write(:P9_12, :HIGH)
       #   GPIO.digital_write(:P9_12, :LOW)
       def digital_write(pin, state)
-        check_valid_state(state)
+        validate_state(state)
         check_gpio_enabled(pin)
 
         raise StandardError, "PIN not in GPIO OUT mode: #{pin}" unless get_gpio_mode(pin) == :OUT
@@ -244,7 +199,7 @@ module Beaglebone #:nodoc:
       # @example
       #   wait_for_edge(:P9_11, :RISING, 30) => :RISING
       def wait_for_edge(pin, edge, timeout = nil, disable=true)
-        check_valid_edge(edge)
+        validate_edge(edge)
         raise ArgumentError, "Cannot wait for edge trigger NONE: #{pin}" if edge.to_sym == :NONE
 
         check_gpio_enabled(pin)
@@ -280,12 +235,10 @@ module Beaglebone #:nodoc:
 
       # Returns true if specified pin is enabled in GPIO mode, else false
       def enabled?(pin)
-
+        return false unless valid?(pin)
         return true if Beaglebone::get_pin_status(pin, :type) == :gpio
 
-        return false unless valid?(pin)
         if Dir.exists?(gpio_directory(pin))
-
           Beaglebone::set_pin_status(pin, :type, :gpio)
           return true
         end
@@ -354,8 +307,8 @@ module Beaglebone #:nodoc:
       #   GPIO.set_gpio_mode(:P9_12, :OUT)
       #   GPIO.set_gpio_mode(:P9_11, :IN)
       def set_gpio_mode(pin, mode)
-        Beaglebone::check_valid_pin(pin, :gpio)
-        check_valid_mode(mode)
+        Beaglebone::validate_pin!(pin, :gpio)
+        validate_mode!(mode)
         check_gpio_enabled(pin)
 
         File.open("#{gpio_directory(pin)}/direction", 'w') { |f| f.write mode.to_s.downcase }
@@ -371,8 +324,8 @@ module Beaglebone #:nodoc:
       # @example
       #   GPIO.set_gpio_edge(:P9_11, :RISING)
       def set_gpio_edge(pin, edge, force=nil)
-        check_valid_edge(edge)
-        Beaglebone::check_valid_pin(pin, :gpio)
+        validate_edge(edge)
+        Beaglebone::validate_pin!(pin, :gpio)
 
         raise StandardError, "PIN not in GPIO IN mode: #{pin}" unless get_gpio_mode(pin) == :IN
 
@@ -419,7 +372,7 @@ module Beaglebone #:nodoc:
       # @param pin should be a symbol representing the header pin
       def disable_gpio_pin(pin)
 
-        Beaglebone::check_valid_pin(pin, :gpio)
+        Beaglebone::validate_pin!(pin, :gpio)
 
         pininfo = PINS[pin]
 
@@ -428,17 +381,8 @@ module Beaglebone #:nodoc:
         #close any running threads
         stop_edge_wait(pin)
 
-        #write to unexport to disable gpio
-        begin
-          File.open('/sys/class/gpio/unexport', 'w') { |f| f.write(pininfo[:gpio]) }
-        rescue
-          #
-        end
-
-        #unload device tree
-        Beaglebone::device_tree_unload("#{TREES[:GPIO][:pin]}#{pin}_.*") unless pininfo[:led]
-
-        #remove status from hash so following enabled? call checks actual system
+        unexport_pin(pininfo[:gpio])
+        #remove status from hash so following enabled ? call checks actual system
         Beaglebone::delete_pin_status(pin)
 
         #check to see if pin is GPIO enabled in /sys/class/gpio/
@@ -449,7 +393,7 @@ module Beaglebone #:nodoc:
       private
 
       #ensure edge type is valid
-      def check_valid_edge(edge)
+      def validate_edge(edge)
         raise ArgumentError, "No such edge: #{edge.to_s}" unless EDGES.include?(edge)
       end
 
@@ -461,7 +405,6 @@ module Beaglebone #:nodoc:
 
       #check if pin is valid to use as gpio pin
       def valid?(pin)
-        #check to see if pin exists
         return false unless PINS[pin]
         return false unless PINS[pin][:gpio]
 
@@ -479,13 +422,8 @@ module Beaglebone #:nodoc:
       #convenience method for getting gpio dir in /sys
       def gpio_directory(pin)
         raise StandardError, 'Invalid Pin' unless valid?(pin)
-        #led's are in a special place
-        if PINS[pin][:led]
-          "/sys/class/leds/beaglebone:green:#{pin.to_s.downcase}"
-        else
-          #normal gpio pins
-          "/sys/class/gpio/gpio#{PINS[pin][:gpio]}"
-        end
+
+        "#{GPIO_USERSPACE}/#{PINS[pin][:gpio]}"
       end
 
       #read gpio direction file
@@ -502,14 +440,7 @@ module Beaglebone #:nodoc:
         fd = Beaglebone::get_pin_status(pin, :fd_value)
         return fd if fd
 
-        pininfo = PINS[pin]
-
-        #leds aren't normal gpio pins, we can toggle them on and off however.
-        if pininfo[:led]
-          fd = File.open("#{gpio_directory(pin)}/brightness", 'w+')
-        else
-          fd = File.open("#{gpio_directory(pin)}/value", 'w+')
-        end
+        fd = File.open("#{gpio_directory(pin)}/value", 'w+')
 
         Beaglebone::set_pin_status(pin, :fd_value, fd)
       end
@@ -522,73 +453,30 @@ module Beaglebone #:nodoc:
       end
 
       #ensure state is valid
-      def check_valid_state(state)
+      def validate_state(state)
         #check to see if mode is valid
         state = state.to_sym
         raise ArgumentError, "No such state: #{state.to_s}" unless STATES.include?(state)
       end
 
       #ensure mode is valid
-      def check_valid_mode(mode)
-        #check to see if mode is valid
+      def validate_mode!(mode)
         mode = mode.to_sym
         raise ArgumentError, "No such mode: #{mode.to_s}" unless MODES.include?(mode)
       end
 
       #ensure gpio pin is enabled
       def check_gpio_enabled(pin)
-        Beaglebone::check_valid_pin(pin, :gpio)
+        Beaglebone::validate_pin!(pin, :gpio)
         raise StandardError, "PIN not GPIO enabled: #{pin}" unless enabled?(pin)
       end
 
-      def create_device_tree(pin, mode, pullmode, slewrate, force = false)
-        #get info from PINS hash
-        pininfo = PINS[pin]
+      def config_pin_mode(mode)
+        mode == :IN ? :in- : :lo
+      end
 
-        #generate data value for dts
-        #Bit 15 PIN USAGE is an indicator and should be a 1 if the pin is used or 0 if it is unused.
-        # Bits 14-7 RESERVED is not to be used and left as 0.
-        # Bit 6 SLEW CONTROL 0=Fast 1=Slow
-        # Bit 5 RX Enabled 0=Disabled 1=Enabled
-        # Bit 4 PU/PD 0=Pulldown 1=Pullup.
-        # Bit 3 PULLUP/DN 0=Pullup/pulldown enabled 1= Pullup/pulldown disabled
-        # Bit 2-0 MUX MODE SELECT Mode 0-7. (refer to TRM)
-        pin_data = 0
-        pin_data |= 0b1000000 if slewrate == :SLOW
-        pin_data |= 0b100000 if mode == :IN
-        case pullmode
-          when :PULLUP
-            pin_data |= 0b10000
-          when :NONE
-            pin_data |= 0b1000
-          else
-            # default is pulldown enabled
-        end
-        #set mux mode, 7 is gpio
-        pin_data |= 7
-
-        dts = GPIOTEMPLATE.clone
-
-        dts.gsub!('!PIN_KEY!', pin.to_s)
-        dts.gsub!('!PIN_DOT_KEY!', pin.to_s.gsub('_', '.'))
-        dts.gsub!('!PIN_FUNCTION!', pininfo[:gpiofunc])
-        dts.gsub!('!PIN_OFFSET!', pininfo[:muxoffset])
-        dts.gsub!('!DATA!', "0x#{pin_data.to_s(16)}")
-
-        filename = "/lib/firmware/#{TREES[:GPIO][:pin]}#{pin}_0x#{pin_data.to_s(16)}-00A0"
-        dts_fn = "#{filename}.dts"
-        dtb_fn = "#{filename}.dtbo"
-
-        # if we've already built this file, we don't need to do it again
-        return pin_data if File.exists?(dtb_fn) && !force
-
-        dts_file = File.open(dts_fn, 'w')
-        dts_file.write(dts)
-        dts_file.close
-
-        system("dtc -O dtb -o #{dtb_fn} -b 0 -@ #{dts_fn}")
-
-        pin_data
+      def configure_pin(pin, mode, pullmode, slewrate, force = false)
+        raise "config-pin failed: #{$?}" unless system("config-pin", pin.to_s, config_pin_mode)
       end
     end
   end
