@@ -233,7 +233,9 @@ module Beaglebone #:nodoc:
       # Returns true if specified pin is enabled in GPIO mode, else false
       def enabled?(pin)
         return true if Beaglebone::get_pin_status(pin, :type) == :gpio
+        puts 'get_pin_status returned false'
 
+        puts "gpio_directory: #{(gpio_directory(pin)}"
         if Dir.exists?(gpio_directory(pin))
           Beaglebone::set_pin_status(pin, :type, :gpio)
           return true
