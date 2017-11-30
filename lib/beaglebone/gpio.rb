@@ -32,6 +32,7 @@ module Beaglebone #:nodoc:
       #   GPIO.pin_mode(:P9_12, :OUT)
       #   GPIO.pin_mode(:P9_11, :IN, :PULLUP, :FAST)
       def pin_mode(pin, mode, pullmode = nil, slewrate = nil)
+        puts "pin_mode: #{pin}: #{mode}"
         validate_mode!(mode)
         validate_pin!(pin, :gpio)
 
