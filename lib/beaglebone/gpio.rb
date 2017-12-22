@@ -184,13 +184,12 @@ module Beaglebone #:nodoc:
         raise ArgumentError, "No such mode: #{mode.to_s}" unless MODES.include?(mode)
       end
 
-      #ensure gpio pin is enabled
       def check_gpio_enabled(pin)
         raise StandardError, "PIN not GPIO enabled: #{pin}" unless enabled?(pin)
       end
 
       def config_pin_mode(mode)
-        mode == :IN ? 'in-' : 'lo'
+        mode == :IN ? 'in-' : 'gpio'
       end
 
       def configure_pin(pin, mode, pullmode, slewrate, force = false)
