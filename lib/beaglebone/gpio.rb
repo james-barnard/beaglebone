@@ -189,7 +189,7 @@ module Beaglebone #:nodoc:
       end
 
       def config_pin_mode(mode)
-        mode == :IN ? 'in-' : 'gpio'
+        mode == :IN ? 'in-' : 'out'
       end
 
       def configure_pin(pin, mode, pullmode, slewrate, force = false)
